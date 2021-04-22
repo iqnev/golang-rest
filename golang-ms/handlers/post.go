@@ -3,7 +3,7 @@ package handlers
 import (
 	"net/http"
 
-	"github.com/iqnev/golang-rest/data"
+	"github.com/iqnev/golang-rest/ms/data"
 )
 
 // swagger:route POST /products products createProduct
@@ -16,9 +16,10 @@ import (
 
 // Create handles POST requests to add new products
 func (p *Products) Create(rw http.ResponseWriter, req *http.Request) {
-	p.l.Println("Handle POST Product")
 
 	product := req.Context().Value(KeyProduct{}).(data.Product)
 
-	data.AddProduct(&product)
+	p.l.Debug("Inserting product: %#v\n", product)
+
+	p.productDB.AddProduct(&product)
 }

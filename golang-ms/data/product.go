@@ -1,15 +1,23 @@
 package data
 
 import (
+	"context"
 	"fmt"
 	"time"
+
+	"github.com/hashicorp/go-hclog"
+	protos "github.com/iqnev/golang-rest/currency/protos/currency"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
+
+var ErrProductNotFound = fmt.Errorf("Product not found")
 
 type Product struct {
 	ID          int     `json:"id"`
 	Name        string  `json:"name"  validate:"required"`
 	Description string  `json:"description"`
-	Price       float32 `json:"price"  validate:"gt=0"`
+	Price       float64 `json:"price"  validate:"gt=0"`
 	SKU         string  `json:"sku" validate:"required,sku"`
 	CreatedOn   string  `json:"-"`
 	UpdatedOn   string  `json:"-"`
@@ -18,26 +26,109 @@ type Product struct {
 
 type Products []*Product
 
-var ErrProductNotFound = fmt.Errorf("Product not found")
-
-func GetProducts() Products {
-	return productList
+type ProductDB struct {
+	currency protos.CurrencyClient
+	log      hclog.Logger
+	rates    map[string]float64
+	client   protos.Currency_SubscribeRatesClient
 }
 
-func UpdateProduct(id int, pr *Product) error {
-	_, pos, err := findProduct(id)
+func NewProductDB(c protos.CurrencyClient, l hclog.Logger) *ProductDB {
+	pb := &ProductDB{c, l, map[string]float64{}, nil}
+
+	go pb.handleUpdates()
+
+	return pb
+}
+
+func (pr *ProductDB) handleUpdates() {
+	sub, err := pr.currency.SubscribeRates(context.Background())
 
 	if err != nil {
-		return err
+		pr.log.Error("Unable to subscribe for rates", "error", err)
 	}
 
-	pr.ID = id
-	productList[pos] = pr
+	pr.client = sub
+
+	for {
+		rr, err := sub.Recv()
+		pr.log.Info("Recieved updated rate from server", "dest", rr.GetDestination().String())
+
+		if err != nil {
+			pr.log.Error("Error receiving message", "error", err)
+			return
+		}
+
+		pr.rates[rr.Destination.String()] = rr.Rate
+	}
+}
+
+func (pr *ProductDB) GetProducts(currency string) (Products, error) {
+	if currency == "" {
+		return productList, nil
+	}
+
+	rate, err := pr.getRate(currency)
+
+	if err != nil {
+		pr.log.Error("Unable to get rate", "currency", currency, "error", err)
+		return nil, err
+	}
+
+	prd := Products{}
+
+	for _, p := range productList {
+		np := *p
+		np.Price = np.Price * rate
+		prd = append(prd, &np)
+
+	}
+
+	return prd, nil
+}
+
+func (pr *ProductDB) getRate(destination string) (float64, error) {
+	rr := &protos.RateRequest{
+		Base:        protos.Currencies_EUR,
+		Destination: protos.Currencies(protos.Currencies_value[destination]),
+	}
+
+	resp, err := pr.currency.GetRate(context.Background(), rr)
+
+	if err != nil {
+		grpsErr, ok := status.FromError(err)
+
+		if !ok {
+			return -1. err
+		}
+
+		if grpsErr.Code() == codes.InvalidArgument {
+			return -1, fmt.Errorf("Unable to retreive exchange rate from currency service: %s", grpcError.Message())
+		}
+
+	}
+
+	//update cache
+	pr.rates[destination] = resp.Rate
+
+	pr.client.Send(rr)
+
+	return resp.Rate, err
+}
+
+func (p *ProductDB) UpdateProduct(pr *Product) error {
+	i := findIndexByProductID(pr.ID)
+
+	if i == -1 {
+		return ErrProductNotFound
+	}
+
+	productList[i] = pr
 
 	return nil
 }
 
-func DeleteProduct(id int) error {
+func (p *ProductDB) DeleteProduct(id int) error {
 	i := findIndexByProductID(id)
 
 	if i == -1 {
@@ -60,27 +151,31 @@ func findIndexByProductID(id int) int {
 	return -1
 }
 
-func findProduct(id int) (*Product, int, error) {
-	for i, p := range productList {
-		if p.ID == id {
-			return p, i, nil
-		}
-	}
-
-	return nil, -1, ErrProductNotFound
-
-}
-
-func GetProductByID(id int) (*Product, error) {
+func (p *ProductDB) GetProductByID(id int, currency string) (*Product, error) {
 	i := findIndexByProductID(id)
 	if id == -1 {
 		return nil, ErrProductNotFound
 	}
 
-	return productList[i], nil
+	if currency == "" {
+		return productList[i], nil
+	}
+
+	rate, err := p.getRate(currency)
+
+	if err != nil {
+		p.log.Error("Unable to get rate", "currency", currency, "error", err)
+		return nil, err
+	}
+
+	np := *productList[i]
+
+	np.Price = np.Price * rate
+
+	return &np, nil
 }
 
-func AddProduct(pr *Product) {
+func (p *ProductDB) AddProduct(pr *Product) {
 	pr.ID = getNextID()
 
 	productList = append(productList, pr)

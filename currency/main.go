@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/hashicorp/go-hclog"
+	"github.com/iqnev/golang-rest/currency/data"
 	"github.com/iqnev/golang-rest/currency/server"
 
 	"google.golang.org/grpc"
@@ -20,7 +21,14 @@ func main() {
 
 	gc := grpc.NewServer()
 
-	cs := server.NewCurrency(log)
+	rates, err := data.NewExchangeRates(log)
+
+	if err != nil {
+		log.Error("Unable to generate rates", "error", err)
+		os.Exit(1)
+	}
+
+	cs := server.NewCurrency(log, rates)
 
 	protos.RegisterCurrencyServer(gc, cs)
 

@@ -8,12 +8,15 @@ import (
 	"os/signal"
 	"time"
 
-	"github.com/iqnev/golang-rest/data"
-	"github.com/iqnev/golang-rest/handlers"
+	"github.com/hashicorp/go-hclog"
+	"github.com/iqnev/golang-rest/ms/data"
+	"github.com/iqnev/golang-rest/ms/handlers"
+	"google.golang.org/grpc"
 
 	"github.com/go-openapi/runtime/middleware"
 
 	gohandlers "github.com/gorilla/handlers"
+	protos "github.com/iqnev/golang-rest/currency/protos/currency"
 
 	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
@@ -22,12 +25,12 @@ import (
 func main() {
 	//	defer profile.Start(profile.MemProfile, profile.ProfilePath(".")).Stop()
 
-	l := log.New(os.Stdout, "product-api", log.LstdFlags)
+	l := hclog.Default()
 
 	err := godotenv.Load(".env")
 
 	if err != nil {
-		l.Fatalf("Error loading .env file")
+		l.Error("Error loading .env file")
 		os.Exit(1)
 	}
 
@@ -36,13 +39,26 @@ func main() {
 
 	v := data.NewValidation()
 
-	ph := handlers.NewProducts(l, v)
+	conn, err := grpc.Dial("localhost:8989", grpc.WithInsecure())
+	if err != nil {
+		panic(err)
+	}
+
+	defer conn.Close()
+
+	cc := protos.NewCurrencyClient(conn)
+
+	db := data.NewProductDB(cc, l)
+
+	ph := handlers.NewProducts(l, v, db)
 
 	sm := mux.NewRouter()
 
 	getRouter := sm.Methods(http.MethodGet).Subrouter()
 	getRouter.HandleFunc("/", ph.ListAll)
+	getRouter.HandleFunc("/", ph.ListAll).Queries("currency", "{[A-Z]{3}}")
 	getRouter.HandleFunc("/products/{id:[0-9]+}", ph.ListSingle)
+	getRouter.HandleFunc("/products/{id:[0-9]+}", ph.ListSingle).Queries("currency", "{[A-Z]{3}}")
 
 	putRouter := sm.Methods(http.MethodPut).Subrouter()
 	putRouter.HandleFunc("/{id:[0-9]+}", ph.Update)
@@ -72,11 +88,11 @@ func main() {
 	}
 
 	go func() {
-		l.Printf("Starting server on port %s", appPort)
+		l.Info("Starting server on port %s", appPort)
 		err := serv.ListenAndServe()
 
 		if err != nil {
-			l.Printf("Error starting server: %s\n", err)
+			l.Error("Error starting server", "error", err)
 			os.Exit(1)
 		}
 	}()

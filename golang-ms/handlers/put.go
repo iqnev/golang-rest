@@ -3,7 +3,7 @@ package handlers
 import (
 	"net/http"
 
-	"github.com/iqnev/golang-rest/data"
+	"github.com/iqnev/golang-rest/ms/data"
 )
 
 // swagger:route PUT /products products updateProduct
@@ -16,14 +16,17 @@ import (
 
 // Update handles PUT requests to update products
 func (p *Products) Update(rw http.ResponseWriter, req *http.Request) {
+	rw.Header().Add("Content-Type", "application/json")
 	product := req.Context().Value(KeyProduct{}).(data.Product)
-	p.l.Println("[DEBUG] updating record id", product.ID)
+	p.l.Debug("Updating record id", product.ID)
 
-	dataErr := data.UpdateProduct(product.ID, &product)
+	dataErr := p.productDB.UpdateProduct(&product)
 
 	if dataErr == data.ErrProductNotFound {
-		p.l.Println("[ERROR] product not found", dataErr)
+		p.l.Error("Product not found", dataErr)
 		rw.WriteHeader(http.StatusNotFound)
+
+		data.ToJson(&GenericError{Message: "Product not found in database"}, rw)
 		return
 	}
 

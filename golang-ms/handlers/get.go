@@ -3,7 +3,7 @@ package handlers
 import (
 	"net/http"
 
-	"github.com/iqnev/golang-rest/data"
+	"github.com/iqnev/golang-rest/ms/data"
 )
 
 // swagger:route GET /products products listProducts
@@ -13,41 +13,51 @@ import (
 
 // ListAll handles GET requests and returns all current products
 func (p *Products) ListAll(rw http.ResponseWriter, req *http.Request) {
-	p.l.Println("[DEBUG] get all records")
+	p.l.Debug("Get all records")
+	rw.Header().Add("Content-Type", "application/json")
 
-	lp := data.GetProducts()
+	cr := req.URL.Query().Get("currency")
+	products, err := p.productDB.GetProducts(cr)
 
-	err := data.ToJson(lp, rw)
+	if err != nil {
+		rw.WriteHeader(http.StatusInternalServerError)
+		data.ToJson(&GenericError{Message: err.Error()}, rw)
+		return
+	}
+
+	err = data.ToJson(products, rw)
 	if err != nil {
 		// we should never be here but log the error just incase
-		p.l.Println("[ERROR] serializing product", err)
+		p.l.Error("Unable to serializing product", "error", err)
 	}
 }
 
-// swagger:route GET /products/{id} products listSingle
+// swagger:route GET /products/{id} products listSingleProduct
 // Return a list of products from the database
 // responses:
 //	200: productResponse
 //	404: errorResponse
 func (p *Products) ListSingle(rw http.ResponseWriter, req *http.Request) {
-
+	rw.Header().Add("Content-Type", "application/json")
 	id := getProductID(req)
 
-	p.l.Println("[DEBUG] get record id", id)
+	cur := req.URL.Query().Get("currency")
 
-	prod, err := data.GetProductByID(id)
+	p.l.Debug("Get record", "id", id)
+
+	prod, err := p.productDB.GetProductByID(id, cur)
 
 	switch err {
 	case nil:
 
 	case data.ErrProductNotFound:
-		p.l.Println("[ERROR] fetching product", err)
+		p.l.Error("Unable to fetch product", err)
 
 		rw.WriteHeader(http.StatusNotFound)
 		data.ToJson(&GenericError{Message: err.Error()}, rw)
 		return
 	default:
-		p.l.Println("[ERROR] fetching product", err)
+		p.l.Error("Unable to fetching product", "error", err)
 
 		rw.WriteHeader(http.StatusInternalServerError)
 		data.ToJson(&GenericError{Message: err.Error()}, rw)
@@ -57,6 +67,6 @@ func (p *Products) ListSingle(rw http.ResponseWriter, req *http.Request) {
 	err = data.ToJson(prod, rw)
 	if err != nil {
 		// we should never be here but log the error just incase
-		p.l.Println("[ERROR] serializing product", err)
+		p.l.Error("Unable to  serializing product", err)
 	}
 }

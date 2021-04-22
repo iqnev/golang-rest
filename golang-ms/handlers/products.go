@@ -2,18 +2,19 @@ package handlers
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 	"strconv"
 
-	"github.com/iqnev/golang-rest/data"
+	"github.com/hashicorp/go-hclog"
+	"github.com/iqnev/golang-rest/ms/data"
 
 	"github.com/gorilla/mux"
 )
 
 type Products struct {
-	l *log.Logger
-	v *data.Validation
+	l         hclog.Logger
+	v         *data.Validation
+	productDB *data.ProductDB
 }
 
 type GenericError struct {
@@ -28,8 +29,8 @@ type KeyProduct struct{}
 
 var ErrInvalidProductPath = fmt.Errorf("Invalid Path, path should be /products/[id]")
 
-func NewProducts(l *log.Logger, v *data.Validation) *Products {
-	return &Products{l, v}
+func NewProducts(l hclog.Logger, v *data.Validation, pdb *data.ProductDB) *Products {
+	return &Products{l, v, pdb}
 }
 
 func getProductID(r *http.Request) int {

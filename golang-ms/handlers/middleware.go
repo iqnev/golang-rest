@@ -2,20 +2,20 @@ package handlers
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 
-	"github.com/iqnev/golang-rest/data"
+	"github.com/iqnev/golang-rest/ms/data"
 )
 
 func (p *Products) MiddlewareValidateProduct(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		rw.Header().Add("Content-Type", "application/json")
 		product := data.Product{}
 
 		err := data.FromJson(product, r.Body)
 
 		if err != nil {
-			p.l.Println("[ERROR] deserializing product", err)
+			p.l.Error("Deserializing product", err)
 
 			rw.WriteHeader(http.StatusBadRequest)
 			data.ToJson(&GenericError{Message: err.Error()}, rw)
@@ -25,21 +25,11 @@ func (p *Products) MiddlewareValidateProduct(next http.Handler) http.Handler {
 		errs := p.v.Validate(product)
 
 		if len(errs) != 0 {
-			p.l.Println("[ERROR] validating product", errs)
+			p.l.Error("Validating product", "error", errs)
 
 			// return the validation messages as an array
 			rw.WriteHeader(http.StatusUnprocessableEntity)
 			data.ToJson(&ValidationError{Messages: errs.Errors()}, rw)
-			return
-		}
-
-		if errs != nil {
-			p.l.Println("[ERROR] validating product", err)
-			http.Error(
-				rw,
-				fmt.Sprintf("Error validating product: %s", err),
-				http.StatusBadRequest,
-			)
 			return
 		}
 		ctx := context.WithValue(r.Context(), KeyProduct{}, product)

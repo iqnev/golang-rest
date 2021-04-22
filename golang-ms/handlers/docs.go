@@ -15,7 +15,7 @@
 // swagger:meta
 package handlers
 
-import "github.com/iqnev/golang-rest/data"
+import "github.com/iqnev/golang-rest/ms/data"
 
 // Generic error message returned as a string
 // swagger:response errorResponse
@@ -69,4 +69,13 @@ type productIDParamsWrapper struct {
 	// in: path
 	// required: true
 	ID int `json:"id"`
+}
+
+// swagger:parameters listProducts listSingleProduct
+type productQueryParam struct {
+	// Currency used when returning the price of the product,
+	// when not specified currency is returned in GBP.
+	// in: query
+	// required: false
+	Currency string
 }

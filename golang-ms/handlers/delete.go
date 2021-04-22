@@ -3,7 +3,7 @@ package handlers
 import (
 	"net/http"
 
-	"github.com/iqnev/golang-rest/data"
+	"github.com/iqnev/golang-rest/ms/data"
 )
 
 // swagger:route DELETE /products/{id} products deleteProduct
@@ -16,14 +16,15 @@ import (
 
 // Delete handles DELETE requests and removes items from the database
 func (p *Products) Delete(rw http.ResponseWriter, req *http.Request) {
+	rw.Header().Add("Content-Type", "application/json")
 	id := getProductID(req)
 
-	p.l.Println("[DEBUG] deleting record id", id)
+	p.l.Debug("Deleting record", "id", id)
 
-	err := data.DeleteProduct(id)
+	err := p.productDB.DeleteProduct(id)
 
 	if err == data.ErrProductNotFound {
-		p.l.Println("[ERROR] deleting record id does not exist")
+		p.l.Error("Deleting record id does not exist")
 
 		rw.WriteHeader(http.StatusNotFound)
 		data.ToJson(&GenericError{Message: err.Error()}, rw)
@@ -31,7 +32,7 @@ func (p *Products) Delete(rw http.ResponseWriter, req *http.Request) {
 	}
 
 	if err != nil {
-		p.l.Println("[ERROR] deleting record", err)
+		p.l.Error("Deleting record", err)
 
 		rw.WriteHeader(http.StatusInternalServerError)
 		data.ToJson(&GenericError{Message: err.Error()}, rw)

@@ -8,7 +8,7 @@ definitions:
         type: string
         x-go-name: Message
     type: object
-    x-go-package: demo/microservice/handlers
+    x-go-package: github.com/iqnev/golang-rest/ms/handlers
   Product:
     properties:
       description:
@@ -22,14 +22,14 @@ definitions:
         type: string
         x-go-name: Name
       price:
-        format: float
+        format: double
         type: number
         x-go-name: Price
       sku:
         type: string
         x-go-name: SKU
     type: object
-    x-go-package: demo/microservice/data
+    x-go-package: github.com/iqnev/golang-rest/ms/data
   ValidationError:
     properties:
       messages:
@@ -38,7 +38,7 @@ definitions:
         type: array
         x-go-name: Messages
     type: object
-    x-go-package: demo/microservice/handlers
+    x-go-package: github.com/iqnev/golang-rest/ms/handlers
 info:
   description: Documentation for Product API
   title: of Product API
@@ -48,6 +48,13 @@ paths:
     get:
       description: Return a list of products from the database
       operationId: listProducts
+      parameters:
+      - description: |-
+          Currency used when returning the price of the product,
+          when not specified currency is returned in GBP.
+        in: query
+        name: Currency
+        type: string
       responses:
         "200":
           $ref: '#/responses/productsResponse'
@@ -117,7 +124,14 @@ paths:
       - products
     get:
       description: Return a list of products from the database
-      operationId: listSingle
+      operationId: listSingleProduct
+      parameters:
+      - description: |-
+          Currency used when returning the price of the product,
+          when not specified currency is returned in GBP.
+        in: query
+        name: Currency
+        type: string
       responses:
         "200":
           $ref: '#/responses/productResponse'
